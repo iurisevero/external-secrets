@@ -30,6 +30,7 @@ import (
 
 	esv1alpha1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
 	"github.com/external-secrets/external-secrets/pkg/provider"
+	"github.com/external-secrets/external-secrets/pkg/template"
 
 	// Loading registered providers.
 	_ "github.com/external-secrets/external-secrets/pkg/provider/register"
@@ -109,7 +110,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		for k, v := range data {
 			secret.Data[k] = v
 		}
-		return nil
+		return template.Execute(secret, data)
 	})
 
 	if err != nil {
