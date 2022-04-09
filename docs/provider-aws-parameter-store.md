@@ -11,6 +11,7 @@ way users of the `SecretStore` can only access the secrets necessary.
 ``` yaml
 {% include 'aws-parameter-store.yaml' %}
 ```
+**NOTE:** In case of a `ClusterSecretStore`, Be sure to provide `namespace` in `accessKeyIDSecretRef` and `secretAccessKeySecretRef`  with the namespaces where the secrets reside.
 
 !!! warning "API Pricing & Throttling"
     The SSM Parameter Store API is charged by throughput and
@@ -19,14 +20,14 @@ way users of the `SecretStore` can only access the secrets necessary.
 
 ### IAM Policy
 
-Create a IAM Policy to pin down access to secrets matching `dev-*`, for futher information see [AWS Documentation](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-access.html):
+Create a IAM Policy to pin down access to secrets matching `dev-*`, for further information see [AWS Documentation](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-access.html):
 
 ``` json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Effect": "Deny",
+      "Effect": "Allow",
       "Action": [
         "ssm:GetParameter*"
       ],
@@ -53,7 +54,7 @@ Consider the following JSON object that is stored in the Parameter Store key `my
 
 This is an example on how you would look up nested keys in the above json object:
 ``` yaml
-apiVersion: external-secrets.io/v1alpha1
+apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
   name: example

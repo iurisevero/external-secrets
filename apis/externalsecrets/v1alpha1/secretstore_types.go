@@ -28,6 +28,10 @@ type SecretStoreSpec struct {
 
 	// Used to configure the provider. Only one provider may be set
 	Provider *SecretStoreProvider `json:"provider"`
+
+	// Used to configure http retries if failed
+	// +optional
+	RetrySettings *SecretStoreRetrySettings `json:"retrySettings,omitempty"`
 }
 
 // SecretStoreProvider contains the provider-specific configration.
@@ -37,12 +41,70 @@ type SecretStoreProvider struct {
 	// AWS configures this store to sync secrets using AWS Secret Manager provider
 	// +optional
 	AWS *AWSProvider `json:"aws,omitempty"`
+
+	// AzureKV configures this store to sync secrets using Azure Key Vault provider
+	// +optional
+	AzureKV *AzureKVProvider `json:"azurekv,omitempty"`
+
+	// Akeyless configures this store to sync secrets using Akeyless Vault provider
+	// +optional
+	Akeyless *AkeylessProvider `json:"akeyless,omitempty"`
+
+	// Vault configures this store to sync secrets using Hashi provider
+	// +optional
+	Vault *VaultProvider `json:"vault,omitempty"`
+
+	// GCPSM configures this store to sync secrets using Google Cloud Platform Secret Manager provider
+	// +optional
+	GCPSM *GCPSMProvider `json:"gcpsm,omitempty"`
+
+	// Oracle configures this store to sync secrets using Oracle Vault provider
+	// +optional
+	Oracle *OracleProvider `json:"oracle,omitempty"`
+
+	// IBM configures this store to sync secrets using IBM Cloud provider
+	// +optional
+	IBM *IBMProvider `json:"ibm,omitempty"`
+
+	// YandexLockbox configures this store to sync secrets using Yandex Lockbox provider
+	// +optional
+	YandexLockbox *YandexLockboxProvider `json:"yandexlockbox,omitempty"`
+
+	// GItlab configures this store to sync secrets using Gitlab Variables provider
+	// +optional
+	Gitlab *GitlabProvider `json:"gitlab,omitempty"`
+
+	// Alibaba configures this store to sync secrets using Alibaba Cloud provider
+	// +optional
+	Alibaba *AlibabaProvider `json:"alibaba,omitempty"`
+
+	// Webhook configures this store to sync secrets using a generic templated webhook
+	// +optional
+	Webhook *WebhookProvider `json:"webhook,omitempty"`
+
+	// Kubernetes configures this store to sync secrets using a Kubernetes cluster provider
+	// +optional
+	Kubernetes *KubernetesProvider `json:"kubernetes,omitempty"`
+
+	// Fake configures a store with static key/value pairs
+	// +optional
+	Fake *FakeProvider `json:"fake,omitempty"`
+}
+
+type SecretStoreRetrySettings struct {
+	MaxRetries    *int32  `json:"maxRetries,omitempty"`
+	RetryInterval *string `json:"retryInterval,omitempty"`
 }
 
 type SecretStoreConditionType string
 
 const (
 	SecretStoreReady SecretStoreConditionType = "Ready"
+
+	ReasonInvalidStore          = "InvalidStoreConfiguration"
+	ReasonInvalidProviderConfig = "InvalidProviderConfig"
+	ReasonValidationFailed      = "ValidationFailed"
+	ReasonStoreValid            = "Valid"
 )
 
 type SecretStoreStatusCondition struct {
@@ -69,7 +131,9 @@ type SecretStoreStatus struct {
 
 // SecretStore represents a secure external location for storing secrets, which can be referenced as part of `storeRef` fields.
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
 // +kubebuilder:subresource:status
+// +kubebuilder:deprecatedversion
 // +kubebuilder:resource:scope=Namespaced,categories={externalsecrets},shortName=ss
 type SecretStore struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -92,13 +156,16 @@ type SecretStoreList struct {
 
 // ClusterSecretStore represents a secure external location for storing secrets, which can be referenced as part of `storeRef` fields.
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
+// +kubebuilder:deprecatedversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={externalsecrets},shortName=css
 type ClusterSecretStore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec SecretStoreSpec `json:"spec,omitempty"`
+	Spec   SecretStoreSpec   `json:"spec,omitempty"`
+	Status SecretStoreStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

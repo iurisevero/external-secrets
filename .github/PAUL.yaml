@@ -1,5 +1,8 @@
 maintainers:
 - knelasevero
+- gusfcarvalho
+- sebagomez
+- serdarkalayci
 - riccardomc
 - iamcaleberic
 - jonatasbaldin
@@ -8,6 +11,9 @@ maintainers:
 - moolen
 - silasbw
 - Flydiverny
+- gabibeyer
+- ricardoptcosta
+- rodrmartinez
 # Allows for the /label and /remove-label commands
 # usage: /label enhancement
 # usage: /remove-label enhancement
@@ -34,7 +40,7 @@ pull_requests:
   # This will limit the amount of PR's a single contributer can have
   # Limits work in progress
   limit_pull_requests:
-    max_number: 15
+    max_number: 30
   # This is the message that will displayed when a user opens a pull request
   open_message: |
     Greetings!
@@ -42,6 +48,11 @@ pull_requests:
     If this is your first time contributing, please make
     sure to read the [Developer](https://www.external-secrets.io/contributing-devguide/) and [Contributing Process](https://www.external-secrets.io/contributing-process/) guides.
     Please also mind and follow our [Code of Conduct](https://www.external-secrets.io/contributing-coc/).
+    
+    Useful commands:
+      - `make fmt`: Formats the code
+      - `make check-diff`: Ensures the branch is clean
+      - `make reviewable`: Ensures a PR is ready for review
   # Enables the /cat command
   cats_enabled: true
   # enables the /dog command
@@ -49,3 +60,4 @@ pull_requests:
   # Allows any maintainer in the list to run /approve
   # Paul will approve the PR (Does not merge it)
   allow_approval: true
+  giphy_enabled: true

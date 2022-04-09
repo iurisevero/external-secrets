@@ -25,7 +25,7 @@ lifecycle of the secrets for you.
 To get started, please read through [API overview](api-overview.md) this should
 give you a high-level overview to understand the API and use-cases. After that
 please follow one of our [guides](guides-introduction.md) to get a jump start
-using the operator.
+using the operator. See our [getting started guide](guides-getting-started.md) for installation instructions.
 
 For a complete reference of the API types please refer to our [API
 Reference](spec.md).
@@ -39,8 +39,17 @@ even opinions matter!
 
 How to get involved:
 
-- Monthly Meeting: we announce our meetings on slack
-  ([agenda](https://hackmd.io/GSGEpTVdRZCP6LDxV3FHJA))
+- Bi-weekly Development Meeting every odd week at [5:30 PM Berlin Time](https://dateful.com/time-zone-converter?t=17:30&tz=Europe/Berlin)
+  ([agenda](https://hackmd.io/GSGEpTVdRZCP6LDxV3FHJA), [jitsi call](https://meet.jit.si/SurroundingContentionsImportSubsequently))
 - [Kubernetes Slack
   #external-secrets](https://kubernetes.slack.com/messages/external-secrets)
 - [Contributing Process](contributing-process.md)
+
+### Kicked off by
+
+![godaddy-logo](./pictures/godaddy_logo.png)
+
+### Sponsored by
+
+![cs-logo](./pictures/cs_logo.png)
+![Form3](./pictures/form3_logo.png)

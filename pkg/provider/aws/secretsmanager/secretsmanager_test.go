@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package secretsmanager
 
 import (
@@ -22,271 +23,276 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	awssm "github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 
-	esv1alpha1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
+	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	fakesm "github.com/external-secrets/external-secrets/pkg/provider/aws/secretsmanager/fake"
-	sess "github.com/external-secrets/external-secrets/pkg/provider/aws/session"
 )
 
-func TestConstructor(t *testing.T) {
-	s, err := sess.New("1111", "2222", "foo", "", nil)
-	assert.Nil(t, err)
-	c, err := New(s)
-	assert.Nil(t, err)
-	assert.NotNil(t, c.client)
+type secretsManagerTestCase struct {
+	fakeClient     *fakesm.Client
+	apiInput       *awssm.GetSecretValueInput
+	apiOutput      *awssm.GetSecretValueOutput
+	remoteRef      *esv1beta1.ExternalSecretDataRemoteRef
+	apiErr         error
+	expectError    string
+	expectedSecret string
+	// for testing secretmap
+	expectedData map[string][]byte
+	// for testing caching
+	expectedCounter *int
+}
+
+const unexpectedErrorString = "[%d] unexpected error: %s, expected: '%s'"
+
+func makeValidSecretsManagerTestCase() *secretsManagerTestCase {
+	smtc := secretsManagerTestCase{
+		fakeClient:     fakesm.NewClient(),
+		apiInput:       makeValidAPIInput(),
+		remoteRef:      makeValidRemoteRef(),
+		apiOutput:      makeValidAPIOutput(),
+		apiErr:         nil,
+		expectError:    "",
+		expectedSecret: "",
+		expectedData:   map[string][]byte{},
+	}
+	smtc.fakeClient.WithValue(smtc.apiInput, smtc.apiOutput, smtc.apiErr)
+	return &smtc
+}
+
+func makeValidRemoteRef() *esv1beta1.ExternalSecretDataRemoteRef {
+	return &esv1beta1.ExternalSecretDataRemoteRef{
+		Key:     "/baz",
+		Version: "AWSCURRENT",
+	}
+}
+
+func makeValidAPIInput() *awssm.GetSecretValueInput {
+	return &awssm.GetSecretValueInput{
+		SecretId:     aws.String("/baz"),
+		VersionStage: aws.String("AWSCURRENT"),
+	}
+}
+
+func makeValidAPIOutput() *awssm.GetSecretValueOutput {
+	return &awssm.GetSecretValueOutput{
+		SecretString: aws.String(""),
+	}
+}
+
+func makeValidSecretsManagerTestCaseCustom(tweaks ...func(smtc *secretsManagerTestCase)) *secretsManagerTestCase {
+	smtc := makeValidSecretsManagerTestCase()
+	for _, fn := range tweaks {
+		fn(smtc)
+	}
+	smtc.fakeClient.WithValue(smtc.apiInput, smtc.apiOutput, smtc.apiErr)
+	return smtc
+}
+
+// This case can be shared by both GetSecret and GetSecretMap tests.
+// bad case: set apiErr.
+var setAPIErr = func(smtc *secretsManagerTestCase) {
+	smtc.apiErr = fmt.Errorf("oh no")
+	smtc.expectError = "oh no"
 }
 
 // test the sm<->aws interface
 // make sure correct values are passed and errors are handled accordingly.
-func TestGetSecret(t *testing.T) {
-	fake := &fakesm.Client{}
-	p := &SecretsManager{
-		client: fake,
+func TestSecretsManagerGetSecret(t *testing.T) {
+	// good case: default version is set
+	// key is passed in, output is sent back
+	setSecretString := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String("testtesttest")
+		smtc.expectedSecret = "testtesttest"
 	}
-	for i, row := range []struct {
-		apiInput       *awssm.GetSecretValueInput
-		apiOutput      *awssm.GetSecretValueOutput
-		rr             esv1alpha1.ExternalSecretDataRemoteRef
-		apiErr         error
-		expectError    string
-		expectedSecret string
-	}{
-		{
-			// good case: default version is set
-			// key is passed in, output is sent back
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String("RRRRR"),
-			},
-			apiErr:         nil,
-			expectError:    "",
-			expectedSecret: "RRRRR",
-		},
-		{
-			// good case: extract property
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key:      "/baz",
-				Property: "/shmoo",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`{"/shmoo": "bang"}`),
-			},
-			apiErr:         nil,
-			expectError:    "",
-			expectedSecret: "bang",
-		},
-		{
-			// bad case: missing property
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key:      "/baz",
-				Property: "INVALPROP",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`{"/shmoo": "bang"}`),
-			},
-			apiErr:         nil,
-			expectError:    "key INVALPROP does not exist in secret",
-			expectedSecret: "",
-		},
-		{
-			// bad case: extract property failure due to invalid json
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key:      "/baz",
-				Property: "INVALPROP",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`------`),
-			},
-			apiErr:         nil,
-			expectError:    "key INVALPROP does not exist in secret",
-			expectedSecret: "",
-		},
-		{
-			// case: ssm.SecretString may be nil but binary is set
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: nil,
-				SecretBinary: []byte("yesplease"),
-			},
-			apiErr:         nil,
-			expectError:    "",
-			expectedSecret: "yesplease",
-		},
-		{
-			// case: both .SecretString and .SecretBinary is nil
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: nil,
-				SecretBinary: nil,
-			},
-			apiErr:         nil,
-			expectError:    "no secret string nor binary for key",
-			expectedSecret: "",
-		},
-		{
-			// case: secretOut.SecretBinary JSON parsing
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key:      "/baz",
-				Property: "foobar.baz",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: nil,
-				SecretBinary: []byte(`{"foobar":{"baz":"nestedval"}}`),
-			},
-			apiErr:         nil,
-			expectError:    "",
-			expectedSecret: "nestedval",
-		},
-		{
-			// should pass version
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/foo/bar"),
-				VersionStage: aws.String("1234"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key:     "/foo/bar",
-				Version: "1234",
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String("FOOBA!"),
-			},
-			apiErr:         nil,
-			expectError:    "",
-			expectedSecret: "FOOBA!",
-		},
-		{
-			// should return err
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/foo/bar"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/foo/bar",
-			},
-			apiOutput:   &awssm.GetSecretValueOutput{},
-			apiErr:      fmt.Errorf("oh no"),
-			expectError: "oh no",
-		},
-	} {
-		fake.WithValue(row.apiInput, row.apiOutput, row.apiErr)
-		out, err := p.GetSecret(context.Background(), row.rr)
-		if !ErrorContains(err, row.expectError) {
-			t.Errorf("[%d] unexpected error: %s, expected: '%s'", i, err.Error(), row.expectError)
+
+	// good case: extract property
+	// Testing that the property exists in the SecretString
+	setRemoteRefPropertyExistsInKey := func(smtc *secretsManagerTestCase) {
+		smtc.remoteRef.Property = "/shmoo"
+		smtc.apiOutput.SecretString = aws.String(`{"/shmoo": "bang"}`)
+		smtc.expectedSecret = "bang"
+	}
+
+	// bad case: missing property
+	setRemoteRefMissingProperty := func(smtc *secretsManagerTestCase) {
+		smtc.remoteRef.Property = "INVALPROP"
+		smtc.expectError = "key INVALPROP does not exist in secret"
+	}
+
+	// bad case: extract property failure due to invalid json
+	setRemoteRefMissingPropertyInvalidJSON := func(smtc *secretsManagerTestCase) {
+		smtc.remoteRef.Property = "INVALPROP"
+		smtc.apiOutput.SecretString = aws.String(`------`)
+		smtc.expectError = "key INVALPROP does not exist in secret"
+	}
+
+	// good case: set .SecretString to nil but set binary with value
+	setSecretBinaryNotSecretString := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretBinary = []byte("yesplease")
+		// needs to be set as nil, empty quotes ("") is considered existing
+		smtc.apiOutput.SecretString = nil
+		smtc.expectedSecret = "yesplease"
+	}
+
+	// bad case: both .SecretString and .SecretBinary are nil
+	setSecretBinaryAndSecretStringToNil := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretBinary = nil
+		smtc.apiOutput.SecretString = nil
+		smtc.expectError = "no secret string nor binary for key"
+	}
+	// good case: secretOut.SecretBinary JSON parsing
+	setNestedSecretValueJSONParsing := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = nil
+		smtc.apiOutput.SecretBinary = []byte(`{"foobar":{"baz":"nestedval"}}`)
+		smtc.remoteRef.Property = "foobar.baz"
+		smtc.expectedSecret = "nestedval"
+	}
+	// good case: secretOut.SecretBinary no JSON parsing if name on key
+	setSecretValueWithDot := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = nil
+		smtc.apiOutput.SecretBinary = []byte(`{"foobar.baz":"nestedval"}`)
+		smtc.remoteRef.Property = "foobar.baz"
+		smtc.expectedSecret = "nestedval"
+	}
+
+	// good case: custom version set
+	setCustomVersion := func(smtc *secretsManagerTestCase) {
+		smtc.apiInput.VersionStage = aws.String("1234")
+		smtc.remoteRef.Version = "1234"
+		smtc.apiOutput.SecretString = aws.String("FOOBA!")
+		smtc.expectedSecret = "FOOBA!"
+	}
+
+	successCases := []*secretsManagerTestCase{
+		makeValidSecretsManagerTestCase(),
+		makeValidSecretsManagerTestCaseCustom(setSecretString),
+		makeValidSecretsManagerTestCaseCustom(setRemoteRefPropertyExistsInKey),
+		makeValidSecretsManagerTestCaseCustom(setRemoteRefMissingProperty),
+		makeValidSecretsManagerTestCaseCustom(setRemoteRefMissingPropertyInvalidJSON),
+		makeValidSecretsManagerTestCaseCustom(setSecretBinaryNotSecretString),
+		makeValidSecretsManagerTestCaseCustom(setSecretBinaryAndSecretStringToNil),
+		makeValidSecretsManagerTestCaseCustom(setNestedSecretValueJSONParsing),
+		makeValidSecretsManagerTestCaseCustom(setSecretValueWithDot),
+		makeValidSecretsManagerTestCaseCustom(setCustomVersion),
+		makeValidSecretsManagerTestCaseCustom(setAPIErr),
+	}
+
+	for k, v := range successCases {
+		sm := SecretsManager{
+			cache:  make(map[string]*awssm.GetSecretValueOutput),
+			client: v.fakeClient,
 		}
-		if string(out) != row.expectedSecret {
-			t.Errorf("[%d] unexpected secret: expected %s, got %s", i, row.expectedSecret, string(out))
+		out, err := sm.GetSecret(context.Background(), *v.remoteRef)
+		if !ErrorContains(err, v.expectError) {
+			t.Errorf(unexpectedErrorString, k, err.Error(), v.expectError)
+		}
+		if err == nil && string(out) != v.expectedSecret {
+			t.Errorf("[%d] unexpected secret: expected %s, got %s", k, v.expectedSecret, string(out))
+		}
+	}
+}
+func TestCaching(t *testing.T) {
+	fakeClient := fakesm.NewClient()
+
+	// good case: first call, since we are using the same key, results should be cached and the counter should not go
+	// over 1
+	firstCall := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"foo":"bar", "bar":"vodka"}`)
+		smtc.remoteRef.Property = "foo"
+		smtc.expectedSecret = "bar"
+		smtc.expectedCounter = aws.Int(1)
+		smtc.fakeClient = fakeClient
+	}
+	secondCall := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"foo":"bar", "bar":"vodka"}`)
+		smtc.remoteRef.Property = "bar"
+		smtc.expectedSecret = "vodka"
+		smtc.expectedCounter = aws.Int(1)
+		smtc.fakeClient = fakeClient
+	}
+	notCachedCall := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"sheldon":"bazinga", "bar":"foo"}`)
+		smtc.remoteRef.Property = "sheldon"
+		smtc.expectedSecret = "bazinga"
+		smtc.expectedCounter = aws.Int(2)
+		smtc.fakeClient = fakeClient
+		smtc.apiInput.SecretId = aws.String("xyz")
+		smtc.remoteRef.Key = "xyz" // it should reset the cache since the key is different
+	}
+
+	cachedCases := []*secretsManagerTestCase{
+		makeValidSecretsManagerTestCaseCustom(firstCall),
+		makeValidSecretsManagerTestCaseCustom(firstCall),
+		makeValidSecretsManagerTestCaseCustom(secondCall),
+		makeValidSecretsManagerTestCaseCustom(notCachedCall),
+	}
+	sm := SecretsManager{
+		cache: make(map[string]*awssm.GetSecretValueOutput),
+	}
+	for k, v := range cachedCases {
+		sm.client = v.fakeClient
+		out, err := sm.GetSecret(context.Background(), *v.remoteRef)
+		if !ErrorContains(err, v.expectError) {
+			t.Errorf(unexpectedErrorString, k, err.Error(), v.expectError)
+		}
+		if err == nil && string(out) != v.expectedSecret {
+			t.Errorf("[%d] unexpected secret: expected %s, got %s", k, v.expectedSecret, string(out))
+		}
+		if v.expectedCounter != nil && v.fakeClient.ExecutionCounter != *v.expectedCounter {
+			t.Errorf("[%d] unexpected counter value: expected %d, got %d", k, v.expectedCounter, v.fakeClient.ExecutionCounter)
 		}
 	}
 }
 
 func TestGetSecretMap(t *testing.T) {
-	fake := &fakesm.Client{}
-	p := &SecretsManager{
-		client: fake,
+	// good case: default version & deserialization
+	setDeserialization := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"foo":"bar"}`)
+		smtc.expectedData["foo"] = []byte("bar")
 	}
-	for i, row := range []struct {
-		apiInput     *awssm.GetSecretValueInput
-		apiOutput    *awssm.GetSecretValueOutput
-		rr           esv1alpha1.ExternalSecretDataRemoteRef
-		expectedData map[string]string
-		apiErr       error
-		expectError  string
-	}{
-		{
-			// good case: default version & deserialization
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`{"foo":"bar"}`),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			expectedData: map[string]string{
-				"foo": "bar",
-			},
-			apiErr:      nil,
-			expectError: "",
-		},
-		{
-			// bad case: api error returned
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`{"foo":"bar"}`),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			expectedData: map[string]string{
-				"foo": "bar",
-			},
-			apiErr:      fmt.Errorf("some api err"),
-			expectError: "some api err",
-		},
-		{
-			// bad case: invalid json
-			apiInput: &awssm.GetSecretValueInput{
-				SecretId:     aws.String("/baz"),
-				VersionStage: aws.String("AWSCURRENT"),
-			},
-			apiOutput: &awssm.GetSecretValueOutput{
-				SecretString: aws.String(`-----------------`),
-			},
-			rr: esv1alpha1.ExternalSecretDataRemoteRef{
-				Key: "/baz",
-			},
-			expectedData: map[string]string{},
-			apiErr:       nil,
-			expectError:  "unable to unmarshal secret",
-		},
-	} {
-		fake.WithValue(row.apiInput, row.apiOutput, row.apiErr)
-		out, err := p.GetSecretMap(context.Background(), row.rr)
-		if !ErrorContains(err, row.expectError) {
-			t.Errorf("[%d] unexpected error: %s, expected: '%s'", i, err.Error(), row.expectError)
+
+	// good case: nested json
+	setNestedJSON := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"foobar":{"baz":"nestedval"}}`)
+		smtc.expectedData["foobar"] = []byte("{\"baz\":\"nestedval\"}")
+	}
+
+	// good case: caching
+	cachedMap := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`{"foo":"bar", "plus": "one"}`)
+		smtc.expectedData["foo"] = []byte("bar")
+		smtc.expectedData["plus"] = []byte("one")
+		smtc.expectedCounter = aws.Int(1)
+	}
+
+	// bad case: invalid json
+	setInvalidJSON := func(smtc *secretsManagerTestCase) {
+		smtc.apiOutput.SecretString = aws.String(`-----------------`)
+		smtc.expectError = "unable to unmarshal secret"
+	}
+
+	successCases := []*secretsManagerTestCase{
+		makeValidSecretsManagerTestCaseCustom(setDeserialization),
+		makeValidSecretsManagerTestCaseCustom(setNestedJSON),
+		makeValidSecretsManagerTestCaseCustom(setAPIErr),
+		makeValidSecretsManagerTestCaseCustom(setInvalidJSON),
+		makeValidSecretsManagerTestCaseCustom(cachedMap),
+	}
+
+	for k, v := range successCases {
+		sm := SecretsManager{
+			cache:  make(map[string]*awssm.GetSecretValueOutput),
+			client: v.fakeClient,
 		}
-		if cmp.Equal(out, row.expectedData) {
-			t.Errorf("[%d] unexpected secret data: expected %#v, got %#v", i, row.expectedData, out)
+		out, err := sm.GetSecretMap(context.Background(), *v.remoteRef)
+		if !ErrorContains(err, v.expectError) {
+			t.Errorf(unexpectedErrorString, k, err.Error(), v.expectError)
+		}
+		if err == nil && !cmp.Equal(out, v.expectedData) {
+			t.Errorf("[%d] unexpected secret data: expected %#v, got %#v", k, v.expectedData, out)
+		}
+		if v.expectedCounter != nil && v.fakeClient.ExecutionCounter != *v.expectedCounter {
+			t.Errorf("[%d] unexpected counter value: expected %d, got %d", k, v.expectedCounter, v.fakeClient.ExecutionCounter)
 		}
 	}
 }

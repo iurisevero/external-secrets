@@ -16,37 +16,50 @@ package secretstore
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	esv1alpha1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
+	esapi "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
+
+	// Loading registered providers.
+	_ "github.com/external-secrets/external-secrets/pkg/provider/register"
 )
 
-// Reconciler reconciles a SecretStore object.
-type Reconciler struct {
+// StoreReconciler reconciles a SecretStore object.
+type StoreReconciler struct {
 	client.Client
 	Log             logr.Logger
 	Scheme          *runtime.Scheme
+	recorder        record.EventRecorder
+	RequeueInterval time.Duration
 	ControllerClass string
 }
 
-// +kubebuilder:rbac:groups=external-secrets.io,resources=secretstores,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=external-secrets.io,resources=secretstores/status,verbs=get;update;patch
+func (r *StoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("secretstore", req.NamespacedName)
+	var ss esapi.SecretStore
+	err := r.Get(ctx, req.NamespacedName, &ss)
+	if apierrors.IsNotFound(err) {
+		return ctrl.Result{}, nil
+	} else if err != nil {
+		log.Error(err, "unable to get SecretStore")
+		return ctrl.Result{}, err
+	}
 
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("secretstore", req.NamespacedName)
-
-	// your logic here
-
-	return ctrl.Result{}, nil
+	return reconcile(ctx, req, &ss, r.Client, log, r.ControllerClass, r.recorder, r.RequeueInterval)
 }
 
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+// SetupWithManager returns a new controller builder that will be started by the provided Manager.
+func (r *StoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("secret-store")
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&esv1alpha1.SecretStore{}).
+		For(&esapi.SecretStore{}).
 		Complete(r)
 }

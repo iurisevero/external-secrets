@@ -54,12 +54,48 @@ type ExternalSecretTemplateMetadata struct {
 }
 
 // ExternalSecretTemplate defines a blueprint for the created Secret resource.
+// we can not use native corev1.Secret, it will have empty ObjectMeta values: https://github.com/kubernetes-sigs/controller-tools/issues/448
 type ExternalSecretTemplate struct {
 	// +optional
 	Type corev1.SecretType `json:"type,omitempty"`
 
+	// EngineVersion specifies the template engine version
+	// that should be used to compile/execute the
+	// template specified in .data and .templateFrom[].
+	// +kubebuilder:default="v1"
+	EngineVersion TemplateEngineVersion `json:"engineVersion,omitempty"`
+
 	// +optional
 	Metadata ExternalSecretTemplateMetadata `json:"metadata,omitempty"`
+
+	// +optional
+	Data map[string]string `json:"data,omitempty"`
+
+	// +optional
+	TemplateFrom []TemplateFrom `json:"templateFrom,omitempty"`
+}
+
+type TemplateEngineVersion string
+
+const (
+	TemplateEngineV1 TemplateEngineVersion = "v1"
+	TemplateEngineV2 TemplateEngineVersion = "v2"
+)
+
+// +kubebuilder:validation:MinProperties=1
+// +kubebuilder:validation:MaxProperties=1
+type TemplateFrom struct {
+	ConfigMap *TemplateRef `json:"configMap,omitempty"`
+	Secret    *TemplateRef `json:"secret,omitempty"`
+}
+
+type TemplateRef struct {
+	Name  string            `json:"name"`
+	Items []TemplateRefItem `json:"items"`
+}
+
+type TemplateRefItem struct {
+	Key string `json:"key"`
 }
 
 // ExternalSecretTarget defines the Kubernetes Secret to be created
@@ -74,7 +110,16 @@ type ExternalSecretTarget struct {
 	// CreationPolicy defines rules on how to create the resulting Secret
 	// Defaults to 'Owner'
 	// +optional
+	// +kubebuilder:default="Owner"
 	CreationPolicy ExternalSecretCreationPolicy `json:"creationPolicy,omitempty"`
+
+	// Template defines a blueprint for the created Secret resource.
+	// +optional
+	Template *ExternalSecretTemplate `json:"template,omitempty"`
+
+	// Immutable defines if the final secret will be immutable
+	// +optional
+	Immutable bool `json:"immutable,omitempty"`
 }
 
 // ExternalSecretData defines the connection between the Kubernetes Secret key (spec.data.<key>) and the Provider data.
@@ -96,7 +141,18 @@ type ExternalSecretDataRemoteRef struct {
 	// +optional
 	// Used to select a specific property of the Provider value (if a map), if supported
 	Property string `json:"property,omitempty"`
+	// +optional
+	// Used to define a conversion Strategy
+	// +kubebuilder:default="Default"
+	ConversionStrategy ExternalSecretConversionStrategy `json:"conversionStrategy,omitempty"`
 }
+
+type ExternalSecretConversionStrategy string
+
+const (
+	ExternalSecretConversionDefault ExternalSecretConversionStrategy = "Default"
+	ExternalSecretConversionUnicode ExternalSecretConversionStrategy = "Unicode"
+)
 
 // ExternalSecretSpec defines the desired state of ExternalSecret.
 type ExternalSecretSpec struct {
@@ -123,7 +179,8 @@ type ExternalSecretSpec struct {
 type ExternalSecretConditionType string
 
 const (
-	ExternalSecretReady ExternalSecretConditionType = "Ready"
+	ExternalSecretReady   ExternalSecretConditionType = "Ready"
+	ExternalSecretDeleted ExternalSecretConditionType = "Deleted"
 )
 
 type ExternalSecretStatusCondition struct {
@@ -145,6 +202,13 @@ const (
 	ConditionReasonSecretSynced = "SecretSynced"
 	// ConditionReasonSecretSyncedError indicates that there was an error syncing the secret.
 	ConditionReasonSecretSyncedError = "SecretSyncedError"
+	// ConditionReasonSecretDeleted indicates that the secret has been deleted.
+	ConditionReasonSecretDeleted = "SecretDeleted"
+
+	ReasonInvalidStoreRef      = "InvalidStoreRef"
+	ReasonProviderClientConfig = "InvalidProviderClientConfig"
+	ReasonUpdateFailed         = "UpdateFailed"
+	ReasonUpdated              = "Updated"
 )
 
 type ExternalSecretStatus struct {
@@ -152,6 +216,9 @@ type ExternalSecretStatus struct {
 	// refreshTime is the time and date the external secret was fetched and
 	// the target secret updated
 	RefreshTime metav1.Time `json:"refreshTime,omitempty"`
+
+	// SyncedResourceVersion keeps track of the last synced version
+	SyncedResourceVersion string `json:"syncedResourceVersion,omitempty"`
 
 	// +optional
 	Conditions []ExternalSecretStatusCondition `json:"conditions,omitempty"`
@@ -161,9 +228,11 @@ type ExternalSecretStatus struct {
 
 // ExternalSecret is the Schema for the external-secrets API.
 // +kubebuilder:subresource:status
+// +kubebuilder:deprecatedversion
 // +kubebuilder:resource:scope=Namespaced,categories={externalsecrets},shortName=es
 // +kubebuilder:printcolumn:name="Store",type=string,JSONPath=`.spec.secretStoreRef.name`
 // +kubebuilder:printcolumn:name="Refresh Interval",type=string,JSONPath=`.spec.refreshInterval`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
 type ExternalSecret struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -171,6 +240,11 @@ type ExternalSecret struct {
 	Spec   ExternalSecretSpec   `json:"spec,omitempty"`
 	Status ExternalSecretStatus `json:"status,omitempty"`
 }
+
+const (
+	// AnnotationDataHash is used to ensure consistency.
+	AnnotationDataHash = "reconcile.external-secrets.io/data-hash"
+)
 
 // +kubebuilder:object:root=true
 

@@ -25,7 +25,7 @@ to.
 
 ### SecretStore
 
-The idea behind the `SecretStore` resource is to separate concerns of
+The idea behind the [SecretStore](api-secretstore.md) resource is to separate concerns of
 authentication/access and the actual Secret and configuration needed for
 workloads. The ExternalSecret specifies what to fetch, the SecretStore specifies
 how to access. This resource is namespaced.
@@ -37,7 +37,7 @@ The `SecretStore` contains references to secrets which hold credentials to
 access the external API.
 
 ### ExternalSecret
-An ExternalSecret declares what data to fetch. It has a reference to a
+An [ExternalSecret](api-externalsecret.md) declares what data to fetch. It has a reference to a
 `SecretStore` which knows how to access that data. The controller uses that
 `ExternalSecret` as a blueprint to create secrets.
 
@@ -47,8 +47,8 @@ An ExternalSecret declares what data to fetch. It has a reference to a
 
 ### ClusterSecretStore
 
-The `ClusterSecretStore` is just a global, cluster-wide SecretStore that can be
-referenced from all namespaces.
+The [ClusterSecretStore](api-clustersecretstore.md) is a global, cluster-wide SecretStore that can be
+referenced from all namespaces. You can use it to provide a central gateway to your secret provider.
 
 ## Behavior
 
@@ -89,23 +89,16 @@ privileges. It will create/read/update secrets in all namespaces and has access
 to secrets stored in some external API. Ensure that the credentials you provide
 give ESO the least privilege necessary.
 
-Design your `SecretStore`/`ClusterSecretStore` carefully! Use annotations on
-namespaces to restrict access of application developers to read only certain
+Design your `SecretStore`/`ClusterSecretStore` carefully! Be sure to restrict
+access of application developers to read only certain
 keys in a shared environment.
-
-``` yaml
-{% include 'namespace-permitted-annotation.yaml' %}
-```
-
-!!! bug "Not implemented"
-    This is currently **not yet** implemented. Feel free to contribute.
 
 You should also consider using Kubernetes' admission control system (e.g.
 [OPA](https://www.openpolicyagent.org/) or [Kyverno](https://kyverno.io/)) for
 fine-grained access control.
 
 ## Running multiple Controller
-You can run multiple controller within the cluster. One controller can be
+You can run multiple controllers within the cluster. One controller can be
 limited to only process `SecretStores` with a predefined `spec.controller`
 field.
 

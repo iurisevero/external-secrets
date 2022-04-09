@@ -17,11 +17,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	esv1alpha1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
+	esv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 )
 
-func NewExternalSecretCondition(condType esv1alpha1.ExternalSecretConditionType, status v1.ConditionStatus, reason, message string) *esv1alpha1.ExternalSecretStatusCondition {
-	return &esv1alpha1.ExternalSecretStatusCondition{
+// NewExternalSecretCondition a set of default options for creating an External Secret Condition.
+func NewExternalSecretCondition(condType esv1beta1.ExternalSecretConditionType, status v1.ConditionStatus, reason, message string) *esv1beta1.ExternalSecretStatusCondition {
+	return &esv1beta1.ExternalSecretStatusCondition{
 		Type:               condType,
 		Status:             status,
 		LastTransitionTime: metav1.Now(),
@@ -31,7 +32,7 @@ func NewExternalSecretCondition(condType esv1alpha1.ExternalSecretConditionType,
 }
 
 // GetExternalSecretCondition returns the condition with the provided type.
-func GetExternalSecretCondition(status esv1alpha1.ExternalSecretStatus, condType esv1alpha1.ExternalSecretConditionType) *esv1alpha1.ExternalSecretStatusCondition {
+func GetExternalSecretCondition(status esv1beta1.ExternalSecretStatus, condType esv1beta1.ExternalSecretConditionType) *esv1beta1.ExternalSecretStatusCondition {
 	for i := range status.Conditions {
 		c := status.Conditions[i]
 		if c.Type == condType {
@@ -43,20 +44,32 @@ func GetExternalSecretCondition(status esv1alpha1.ExternalSecretStatus, condType
 
 // SetExternalSecretCondition updates the external secret to include the provided
 // condition.
-func SetExternalSecretCondition(status *esv1alpha1.ExternalSecretStatus, condition esv1alpha1.ExternalSecretStatusCondition) {
-	currentCond := GetExternalSecretCondition(*status, condition.Type)
-	if currentCond != nil && currentCond.Status == condition.Status && currentCond.Reason == condition.Reason {
+func SetExternalSecretCondition(es *esv1beta1.ExternalSecret, condition esv1beta1.ExternalSecretStatusCondition) {
+	currentCond := GetExternalSecretCondition(es.Status, condition.Type)
+
+	if currentCond != nil && currentCond.Status == condition.Status &&
+		currentCond.Reason == condition.Reason && currentCond.Message == condition.Message {
+		updateExternalSecretCondition(es, &condition, 1.0)
 		return
 	}
+
 	// Do not update lastTransitionTime if the status of the condition doesn't change.
 	if currentCond != nil && currentCond.Status == condition.Status {
 		condition.LastTransitionTime = currentCond.LastTransitionTime
 	}
-	status.Conditions = append(filterOutCondition(status.Conditions, condition.Type), condition)
+
+	es.Status.Conditions = append(filterOutCondition(es.Status.Conditions, condition.Type), condition)
+
+	if currentCond != nil {
+		updateExternalSecretCondition(es, currentCond, 0.0)
+	}
+
+	updateExternalSecretCondition(es, &condition, 1.0)
 }
 
-func filterOutCondition(conditions []esv1alpha1.ExternalSecretStatusCondition, condType esv1alpha1.ExternalSecretConditionType) []esv1alpha1.ExternalSecretStatusCondition {
-	newConditions := make([]esv1alpha1.ExternalSecretStatusCondition, 0, len(conditions))
+// filterOutCondition returns an empty set of conditions with the provided type.
+func filterOutCondition(conditions []esv1beta1.ExternalSecretStatusCondition, condType esv1beta1.ExternalSecretConditionType) []esv1beta1.ExternalSecretStatusCondition {
+	newConditions := make([]esv1beta1.ExternalSecretStatusCondition, 0, len(conditions))
 	for _, c := range conditions {
 		if c.Type == condType {
 			continue

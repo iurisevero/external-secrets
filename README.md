@@ -4,64 +4,84 @@
 
 ----
 
-The External Secrets Kubernetes operator reads information from a third party service
+The External Secrets Operator reads information from a third party service
 like [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) and automatically injects the values as [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/).
 
 Multiple people and organizations are joining efforts to create a single External Secrets solution based on existing projects. If you are curious about the origins of this project, check out this [issue](https://github.com/external-secrets/kubernetes-external-secrets/issues/47) and this [PR](https://github.com/external-secrets/kubernetes-external-secrets/pull/477).
 
-<a name="original-projects"></a>
+# Supported Backends
 
-# ⚠️ Please bear in mind
+- [AWS Secrets Manager](https://external-secrets.io/latest/provider-aws-secrets-manager/)
+- [AWS Parameter Store](https://external-secrets.io/latest/provider-aws-parameter-store/)
+- [Akeyless](https://www.akeyless.io/)
+- [Hashicorp Vault](https://www.vaultproject.io/)
+- [Google Cloud Secrets Manager](https://external-secrets.io/latest/provider-google-secrets-manager/)
+- [Azure Key Vault](https://external-secrets.io/latest/provider-azure-key-vault/)
+- [IBM Cloud Secrets Manager](https://external-secrets.io/latest/provider-ibm-secrets-manager/)
+- [Yandex Lockbox](https://external-secrets.io/latest/provider-yandex-lockbox/)
+- [Gitlab Project Variables](https://external-secrets.io/latest/provider-gitlab-project-variables/)
+- [Alibaba Cloud KMS](https://www.alibabacloud.com/product/kms) (Docs still missing, PRs welcomed!)
+- [Oracle Vault](https://external-secrets.io/latest/provider-oracle-vault)
+- [Generic Webhook](https://external-secrets.io/latest/provider-webhook)
+- [Kubernetes](https://external-secrets.io/latest/provider-kubernetes)
 
-While this project is not ready, you might consider using the following:
+## Stability and Support Level
 
-- [Kubernetes External Secrets](https://github.com/external-secrets/kubernetes-external-secrets)
-- [Secrets Manager](https://github.com/itscontained/secret-manager)
-- [External Secrets Operator](https://github.com/ContainerSolutions/externalsecret-operator/)
+### Internally maintained:
 
-## Installation
-Clone this repository:
-```shell
-git clone https://github.com/external-secrets/external-secrets.git
-```
+| Provider                                                                 | Stability |                                        Contact |
+| ------------------------------------------------------------------------ | :-------: | ---------------------------------------------: |
+| [AWS SM](https://external-secrets.io/latest/provider-aws-secrets-manager/)      |   stable   | [ESO Org](https://github.com/external-secrets) |
+| [AWS PS](https://external-secrets.io/latest/provider-aws-parameter-store/)      |   stable   | [ESO Org](https://github.com/external-secrets) |
+| [Hashicorp Vault](https://external-secrets.io/latest/provider-hashicorp-vault/) |   stable   | [ESO Org](https://github.com/external-secrets) |
+| [GCP SM](https://external-secrets.io/latest/provider-google-secrets-manager/)   |   stable | [ESO Org](https://github.com/external-secrets) |
 
-Install the Custom Resource Definitions:
-```shell
-make install
-```
+### Community maintained:
 
-Run the controller against the active Kubernetes cluster context:
-```shell
-make run
-```
+| Provider                                                            | Stability |                  Contact                   |
+| ------------------------------------------------------------------- | :-------: | :----------------------------------------: |
+| [Azure KV](https://external-secrets.io/latest/provider-azure-key-vault/)   |   beta   | [@ahmedmus-1A](https://github.com/ahmedmus-1A) [@asnowfix](https://github.com/asnowfix) [@ncourbet-1A](https://github.com/ncourbet-1A) [@1A-mj](https://github.com/1A-mj) |
+| [IBM SM](https://external-secrets.io/latest/provider-ibm-secrets-manager/) |   alpha   |   [@knelasevero](https://github.com/knelasevero) [@sebagomez](https://github.com/sebagomez) [@ricardoptcosta](https://github.com/ricardoptcosta)  |
+| [Yandex Lockbox](https://external-secrets.io/latest/provider-yandex-lockbox/) |   alpha   |   [@AndreyZamyslov](https://github.com/AndreyZamyslov) [@knelasevero](https://github.com/knelasevero)          |
+| [Gitlab Project Variables](https://external-secrets.io/latest/provider-gitlab-project-variables/) |   alpha   |   [@Jabray5](https://github.com/Jabray5)          |
+| Alibaba Cloud KMS                                                   |   alpha  | [@ElsaChelala](https://github.com/ElsaChelala)                                |
+| [Oracle Vault]( https://external-secrets.io/latest/provider-oracle-vault)  |   alpha  | [@KianTigger](https://github.com/KianTigger) [@EladGabay](https://github.com/EladGabay) |
+| [Akeyless]( https://external-secrets.io/latest/provider-akeyless)  |   alpha  | [@renanaAkeyless](https://github.com/renanaAkeyless)                                 |
+| [Generic Webhook](https://external-secrets.io/latest/provider-webhook)  |  alpha  | [@willemm](https://github.com/willemm) |
 
-Apply the sample resources:
-```shell
-kubectl apply -f config/samples/external-secrets_v1alpha1_secretstore.yaml
-kubectl apply -f config/samples/external-secrets_v1alpha1_externalsecret.yaml
-```
+## Documentation
 
-We will add more documentation once we have the implementation for the different providers.
+External Secrets Operator guides and reference documentation is available at [external-secrets.io](https://external-secrets.io).
 
-<a name="features"></a>
+## Support
 
-## Planned Features
+You can use GitHub's [issues](https://github.com/external-secrets/external-secrets/issues) to report bugs/suggest features or use GitHub's [discussions](https://github.com/external-secrets/external-secrets/discussions) to ask for help and figure out problems. You can also reach us at our KES and ESO shared [channel in Kubernetes slack](https://kubernetes.slack.com/messages/external-secrets).
 
-- Support to multiple Provider stores (AWS Secret Manager, GCP Secret Manger, Vault and more) simultaneously.
-- Multiple External Secrets operator instances for different contexts/environments.
-- A custom refresh interval to sync the data from the Providers, syncing your Kubernetes Secrets up to date.
-- Select specific versions of the Provider data.
-
-
-<a name="contributing"></a>
+Even though we have active maintainers and people assigned to this project, we kindly ask for patience when asking for support. We will try to get to priority issues as fast as possible, but there may be some delays.
 
 ## Contributing
 
-We welcome and encourage contributions to this project! Please read the [Developer](https://www.external-secrets.io/contributing-devguide/) and [Contribution process](https://www.external-secrets.io/contributing-process/) guides. Also make sure to check the [Code of Conduct](https://www.external-secrets.io/contributing-coc/) and adhere to its guidelines.
+We welcome and encourage contributions to this project! Please read the [Developer](https://www.external-secrets.io/latest/contributing-devguide/) and [Contribution process](https://www.external-secrets.io/latest/contributing-process/) guides. Also make sure to check the [Code of Conduct](https://www.external-secrets.io/latest/contributing-coc/) and adhere to its guidelines.
 
-<a name="partners"></a>
+## Bi-weekly Development Meeting
+
+We host our development meeting every odd wednesday at [5:30 PM Berlin Time](https://dateful.com/time-zone-converter?t=17:30&tz=Europe/Berlin) on [Jitsi](https://meet.jit.si/SurroundingContentionsImportSubsequently). Meeting notes are recorded on [hackmd](https://hackmd.io/GSGEpTVdRZCP6LDxV3FHJA).
+
+Anyone is welcome to join. Feel free to ask questions, request feedback, raise awareness for an issue or just say hi ;)
+
+## Security
+
+Please report vulnerabilities by email to contact@external-secrets.io, also see our [security policy](SECURITY.md) for details.
+
+## Adopters
+
+Please create a PR and add your company or your project to our [ADOPTERS](ADOPTERS.md) file if you are using our project!
 
 ## Kicked off by
 
-![](assets/CS_logo_1.png)
 ![](assets/Godaddylogo_2020.png)
+
+## Sponsored by
+
+![](assets/CS_logo_1.png)
+![](assets/form3_logo.png)

@@ -8,6 +8,28 @@ git clone https://github.com/external-secrets/external-secrets.git
 cd external-secrets
 ```
 
+If you want to run controller tests you also need to install kubebuilder's `envtest`.
+
+The recommended way to do so is to install [setup-envtest](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest)
+
+Here is an example on how to set it up:
+
+```
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+# list available versions
+setup-envtest list --os $(go env GOOS) --arch $(go env GOARCH)
+
+# To use a specific version
+setup-envtest use -p path 1.20.2
+
+#To set environment variables
+source <(setup-envtest use 1.20.2 -p env --os $(go env GOOS) --arch $(go env GOARCH))
+
+```
+
+for more information, please see [setup-envtest docs](https://github.com/kubernetes-sigs/controller-runtime/tree/master/tools/setup-envtest)
+
 ## Building & Testing
 
 The project uses the `make` build system. It'll run code generators, tests and
@@ -17,7 +39,7 @@ Building the operator binary and docker image:
 
 ```shell
 make build
-make docker-build IMG=external-secrets:latest
+make docker.build IMG=external-secrets:latest
 ```
 
 Run tests and lint the code:
@@ -33,28 +55,47 @@ make docs
 
 ## Installing
 
-To install the External Secret Operator's CRDs into a Kubernetes Cluster run:
+To install the External Secret Operator into a Kubernetes Cluster run:
 
 ```shell
-make install
+helm repo add external-secrets https://charts.external-secrets.io
+helm repo update
+helm install external-secrets external-secrets/external-secrets
 ```
 
-Apply the sample resources:
-```shell
-kubectl apply -f config/samples/external-secrets_v1alpha1_secretstore.yaml
-kubectl apply -f config/samples/external-secrets_v1alpha1_externalsecret.yaml
-```
+You can alternatively run the controller on your host system for development purposes:
 
-You can run the controller on your host system for development purposes:
 
 ```shell
+make crds.install
 make run
 ```
 
 To remove the CRDs run:
 
 ```shell
-make uninstall
+make crds.uninstall
+```
+
+If you need to test some other k8s integrations and need the operator to be deployed to the actuall cluster while developing, you can use the following workflow:
+
+```
+kind create cluster --name external-secrets
+
+export TAG=v2
+export IMAGE=eso-local
+
+#For building in linux
+docker build . -t $IMAGE:$TAG --build-arg TARGETARCH=amd64 --build-arg TARGETOS=linux
+
+#For building in MacOS (OSX)
+#docker build . -t $IMAGE:$TAG --build-arg TARGETARCH=amd64 --build-arg TARGETOS=darwin
+
+#For building in ARM
+#docker build . -t $IMAGE:$TAG --build-arg TARGETARCH=arm --build-arg TARGETOS=linux
+
+make helm.generate
+helm upgrade --install external-secrets ./deploy/charts/external-secrets/ --set image.repository=$IMAGE --set image.tag=$TAG
 ```
 
 !!! note "Contributing Flow"
@@ -63,7 +104,7 @@ make uninstall
 
 ## Documentation
 
-We use [mkdocs material](https://squidfunk.github.io/mkdocs-material/) to generate this
+We use [mkdocs material](https://squidfunk.github.io/mkdocs-material/) and [mike](https://github.com/jimporter/mike) to generate this
 documentation. See `/docs` for the source code and `/hack/api-docs` for the build process.
 
 When writing documentation it is advised to run the mkdocs server with livereload:
@@ -76,7 +117,11 @@ Run the following command to run a complete build. The rendered assets are avail
 
 ```shell
 make docs
-
-# inspect the build with this one-liner
-python -m http.server 8000 --directory site
+make serve-docs
 ```
+
+Open `http://localhost:8000` in your browser.
+
+Since mike uses a branch to create/update documentation, any docs operation will create a diff on your local `gh-pages` branch.
+
+When finished writing/reviewing the docs, clean up your local docs branch changes with `git branch -D gh-pages`
