@@ -89,6 +89,10 @@ type SecretStoreProvider struct {
 	// Fake configures a store with static key/value pairs
 	// +optional
 	Fake *FakeProvider `json:"fake,omitempty"`
+
+	// OnePassword configures this store to sync secrets using a OnePassword Password manager provider
+	// +optional
+	OnePassword *OnePasswordProvider `json:"onepassword,omitempty"`
 }
 
 type SecretStoreRetrySettings struct {
